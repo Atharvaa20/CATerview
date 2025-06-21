@@ -1,0 +1,130 @@
+const express = require('express');
+const router = express.Router();
+const { auth } = require('../middleware/auth');
+const { User, InterviewExperience, College, sequelize, models } = require('../models');
+
+// Get current user's information
+router.get('/me', auth, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id, {
+      attributes: ['id', 'name', 'email', 'role'],
+      include: [
+        {
+          model: models.InterviewExperience,
+          as: 'interviewExperiences',
+          attributes: ['id', 'title', 'year', 'isVerified', 'createdAt'],
+          include: [
+            {
+              model: models.College,
+              as: 'college',
+              attributes: ['id', 'name', 'slug']
+            }
+          ],
+          order: [['createdAt', 'DESC']]
+        }
+      ]
+    });
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch user information',
+      details: error.message 
+    });
+  }
+});
+
+// Get user by ID (admin only)
+router.get('/:id', auth, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Not authorized to access this resource' });
+    }
+
+    const user = await User.findByPk(req.params.id, {
+      attributes: ['id', 'name', 'email', 'role', 'createdAt'],
+      include: [
+        {
+          model: models.InterviewExperience,
+          as: 'interviewExperiences',
+          attributes: ['id', 'title', 'year', 'isVerified', 'createdAt'],
+          include: [
+            {
+              model: models.College,
+              as: 'college',
+              attributes: ['id', 'name', 'slug']
+            }
+          ],
+          order: [['createdAt', 'DESC']]
+        }
+      ]
+    });
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch user information',
+      details: error.message 
+    });
+  }
+});
+
+// Update user profile
+router.put('/me', auth, async (req, res) => {
+  try {
+    const { name, email } = req.body;
+    
+    // Validate input
+    if (!name || !email) {
+      return res.status(400).json({ error: 'Name and email are required' });
+    }
+    
+    // Check if email is already taken by another user
+    const existingUser = await User.findOne({
+      where: {
+        email,
+        id: { [sequelize.Op.ne]: req.user.id }
+      }
+    });
+    
+    if (existingUser) {
+      return res.status(400).json({ error: 'Email is already in use' });
+    }
+    
+    // Update user
+    const user = await User.findByPk(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    user.name = name;
+    user.email = email;
+    await user.save();
+    
+    // Return updated user data
+    const updatedUser = await User.findByPk(user.id, {
+      attributes: ['id', 'name', 'email', 'role', 'createdAt']
+    });
+    
+    res.json(updatedUser);
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).json({ 
+      error: 'Failed to update user information',
+      details: error.message 
+    });
+  }
+});
+
+module.exports = router;
