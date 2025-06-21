@@ -78,13 +78,9 @@ if (dbConfig.ssl) {
 let sequelize;
 
 if (process.env.DATABASE_URL) {
-  // Use connection string directly for Railway
   sequelize = new Sequelize(process.env.DATABASE_URL, {
     ...sequelizeConfig,
-    dialectOptions: {
-      ...sequelizeConfig.dialectOptions,
-      ssl: dbConfig.ssl
-    }
+    dialectOptions: dbConfig.ssl ? { ssl: dbConfig.ssl } : undefined
   });
 } else {
   // Use individual config for local development
